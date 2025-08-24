@@ -1,0 +1,223 @@
+---
+title: "bussiness"
+output: html_document
+date: "2025-04-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Load libraries
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(rpart)
+library(rpart.plot)
+library(broom)
+library(readxl)
+
+file_path <- "finaldata.xlsx"
+
+# Read the dataset from the Excel file
+data <- read_excel(file_path)
+
+# View the first few rows of the data
+head(data)
+```
+
+
+```{r}
+# Check the structure of the dataset
+str(data)
+
+# Convert categorical variables to factors
+data$Presentation_Group <- as.factor(data$Presentation)
+data$Gender <- as.factor(data$Gender)
+
+# Print a summary of the cleaned data
+summary(data)
+
+# Save the cleaned dataset to a CSV file (optional)
+write.csv(data, "cleaned_data.csv", row.names = FALSE)
+
+```
+
+
+```{r}
+# Mean profit by Presentation Group (Yes/No)
+# Mean profit by Presentation Group (Yes/No)
+data %>%
+  group_by(Presentation) %>%
+  summarise(
+    Avg_Profit = mean(Profit),
+    Avg_Income = mean(`Monthly Income`),  # Use backticks around the column name with space
+    Avg_Age = mean(Age)
+  )
+
+
+# Profit distribution by group
+ggplot(data, aes(x = Profit, fill = factor(Presentation))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Profit Distribution by Presentation Group", x = "Profit", y = "Density")
+
+# Income vs Profit scatter plot
+ggplot(data, aes(x = `Monthly Income`, y = Profit, color = factor(Presentation))) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Income vs. Profit by Group", x = "Monthly Income", y = "Profit")
+
+# Gender breakdown by Presentation Group
+ggplot(data, aes(x = Gender, fill = factor(Presentation))) +
+  geom_bar(position = "dodge") +
+  labs(title = "Gender Distribution by Presentation Group")
+
+```
+
+
+```{r}
+# Run two-sample t-test on Profit between groups
+t_test_result <- t.test(
+  Profit ~ Presentation,
+  data = data,
+  var.equal = TRUE  # assuming equal variance; use var.equal = FALSE if Levene's test fails
+)
+
+# Print t-test results
+t_test_result
+```
+
+
+```{r}
+# Build linear regression model
+lm_model <- lm(Profit ~ Presentation + Age + Gender + `Monthly Income`, data = data)
+
+# View model summary
+summary(lm_model)
+```
+
+
+```{r}
+# Fit a decision tree model
+tree_model <- rpart(
+  Profit ~ Presentation + Age + Gender + `Monthly Income`,
+  data = data,
+  method = "anova"  # because Profit is numeric
+)
+
+# Plot the tree
+rpart.plot(tree_model, type = 3, fallen.leaves = TRUE, cex = 0.7)
+```
+
+
+```{r}
+# Predict profit using the tree
+predicted_profit <- predict(tree_model, data)
+# Compare actual vs predicted profit
+head(data.frame(Actual = data$Profit, Predicted = predicted_profit))
+
+```
+
+```{r}
+# Scatter plot of actual vs predicted profits
+ggplot(data.frame(Actual = data$Profit, Predicted = predicted_profit), aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(color = "red", linetype = "dashed") +
+  labs(title = "Actual vs Predicted Profit", x = "Actual Profit", y = "Predicted Profit")
+
+```
+
+```{r}
+# Calculate R-squared manually
+rss <- sum((data$Profit - predicted_profit)^2)
+tss <- sum((data$Profit - mean(data$Profit))^2)
+r_squared <- 1 - rss/tss
+
+# Print R-squared
+r_squared
+
+```
+
+```{r}
+# Add predicted profit as a new column to the original data
+data$Predicted_Profit <- predicted_profit
+
+# Export to CSV file
+write.csv(data, "profit_predictions.csv", row.names = FALSE)
+
+```
+
+
+```{r}
+# Load libraries
+library(dplyr)
+
+# Fit multiple linear regression
+regression_model <- lm(Profit ~ Presentation + Age + Gender + `Monthly Income`, data = data)
+
+# View summary of the regression
+summary(regression_model)
+
+```
+
+```{r}
+install.packages("factoextra")
+
+```
+
+
+```{r}
+# Load libraries
+library(cluster)  # for clustering
+library(factoextra)  # for visualization
+
+# Prepare the data for clustering
+# We'll use scaled data for better clustering
+clustering_data <- data %>%
+  select(Profit, `Monthly Income`, Age) %>%
+  scale()  # standardize variables
+
+# Run k-means clustering (for example, 3 clusters)
+set.seed(123)  # for reproducibility
+kmeans_result <- kmeans(clustering_data, centers = 3, nstart = 25)
+
+# Add cluster result back to original data
+data$Cluster <- as.factor(kmeans_result$cluster)
+
+# Visualize clusters
+fviz_cluster(kmeans_result, data = clustering_data)
+
+# View basic summary
+table(data$Cluster)
+
+```
+```{r}
+# Create a new data frame for plotting (correcting the name!)
+plot_data <- data.frame(
+  Profit = clustering_data[, "Profit"],
+  Income = clustering_data[, "Monthly Income"],
+  Age = clustering_data[, "Age"],
+  Cluster = as.factor(kmeans_result$cluster)
+)
+
+# Plot
+ggplot(plot_data, aes(x = Income, y = Profit, color = Cluster)) +
+  geom_point(alpha = 0.6, size = 3) +
+  labs(
+    title = "Client Segmentation Based on Clustering",
+    x = "Monthly Income (Scaled)",
+    y = "Profit (Scaled)"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "top")
+
+```
+```{r}
+# Cluster Centers
+kmeans_result$centers
+
+```
+
